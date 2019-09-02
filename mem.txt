@@ -1,0 +1,68 @@
+llvmのbuild flagを立ててrebuildすればおｋ？
+参考:https://github.com/dmlc/tvm/issues/966
+todo:tvmのllvm build flagを探す
+そもそもllvmのpathは通ってるような気がするけどなぜ...
+
+参考:https://github.com/dmlc/tvm/issues/3080
+https://discuss.tvm.ai/
+同じようなerrorがtvmコミュでやれって誘導されていた
+>>>Thanks for reporting this, usually we prefer to ask this kind of questions in https://discuss.tvm.ai/ please open a new thread there
+
+llvmのver errorぽい、ver 4.0を入れると解決する？
+https://discuss.tvm.ai/t/error-when-run-pynq-z1-test/1151
+>>>Thanks. I have solved the problem. The problem is that I use the LLVM 7.0.0 version, but TVM now seems do not support 7.0.0 version. So I replace it with the LLVM 4.0.0 version. Then, the TVM VTA in pynq-Z1 work well.
+
+sekiy@gpu:~/workspace/build/tvm/tutorials/seki_tvm_test$ llc --version
+LLVM (http://llvm.org/):
+  LLVM version 3.8.0
+  Optimized build.
+  Built Jun 29 2018 (17:27:50).
+  Default target: x86_64-unknown-linux-gnu
+  Host CPU: broadwell
+
+errorのerror、爆死
+todo:依存関係の解決
+sekiy@gpu:~/workspace/build/tvm/tutorials/seki_tvm_test$ sudo apt-get install clang-4.0 lldb-4.0
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+clang-4.0 is already the newest version (1:4.0-1ubuntu1~16.04.2).
+lldb-4.0 is already the newest version (1:4.0-1ubuntu1~16.04.2).
+You might want to run 'apt-get -f install' to correct these:
+The following packages have unmet dependencies:
+ lldb-4.0 : Depends: python-lldb-4.0 but it is not going to be installed
+E: Unmet dependencies. Try 'apt-get -f install' with no packages (or specify a solution).
+
+
+
+sekiy@gpu:~/workspace/build/tvm/tutorials/seki_tvm_test$ python3 build_code_for_target.py 
+//IRの生成まではうまく行く
+tvm.lower(s, [A, B, C], simple_mode=True)
+produce C {
+  for (i, 0, m) {
+    for (j, 0, n) {
+      C[((i*n) + j)] = (A[((i*n) + j)]*B[((i*n) + j)])
+    }
+  }
+}
+
+Traceback (most recent call last):
+//targetを指定してのcode genで失敗する
+  File "build_code_for_target.py", line 20, in <module>
+    m = tvm.build(f, target="llvm")
+
+  File "/home/sekiy/workspace/build/tvm/python/tvm/build_module.py", line 627, in build
+    mhost = codegen.build_module(fhost_all, str(target_host))
+
+  File "/home/sekiy/workspace/build/tvm/python/tvm/codegen.py", line 36, in build_module
+    return _Build(lowered_func, target)
+
+  File "/home/sekiy/workspace/build/tvm/python/tvm/_ffi/_ctypes/function.py", line 210, in __call__
+    raise get_last_ffi_error()
+
+tvm._ffi.base.TVMError: Traceback (most recent call last):
+  [bt] (2) /home/sekiy/workspace/build/tvm/build/libtvm.so(TVMFuncCall+0x61) [0x7f291e2e5c51]
+  [bt] (1) /home/sekiy/workspace/build/tvm/build/libtvm.so(+0x4052fe) [0x7f291dbb12fe]
+  [bt] (0) /home/sekiy/workspace/build/tvm/build/libtvm.so(tvm::codegen::Build(tvm::Array<tvm::LoweredFunc, void> const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)+0xcb4) [0x7f291dcbdbd4]
+  File "/home/sekiy/workspace/build/tvm/src/codegen/codegen.cc", line 46
+TVMError: Check failed: bf != nullptr: Target llvm is not enabled
