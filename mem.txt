@@ -66,3 +66,28 @@ tvm._ffi.base.TVMError: Traceback (most recent call last):
   [bt] (0) /home/sekiy/workspace/build/tvm/build/libtvm.so(tvm::codegen::Build(tvm::Array<tvm::LoweredFunc, void> const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)+0xcb4) [0x7f291dcbdbd4]
   File "/home/sekiy/workspace/build/tvm/src/codegen/codegen.cc", line 46
 TVMError: Check failed: bf != nullptr: Target llvm is not enabled
+
+llvmのverを6.0.1にしてtvmをrebuildしたらtarget=llvmでcode gen成功
+tvmの利用するllvmは4.0以上にしておく、しかし10は非対応で同じくerror
+https://github.com/llvm-mirror/llvm/tree/release_60
+
+config.cmakeの一部
+# Whether build with LLVM support
+# Requires LLVM version >= 4.0
+#
+# Possible values:
+# - ON: enable llvm with cmake's find search
+# - OFF: disable llvm
+# - /path/to/llvm-config: enable specific LLVM when multiple llvm-dev is available.
+set(USE_LLVM /usr/local/bin/llvm-config)
+
+code生成成功（表示はIR）
+sekiy@gpu:~/workspace/tvm_test$ python3 build_code_for_target.py 
+tvm.lower(s, [A, B, C], simple_mode=True)
+produce C {
+  for (i, 0, m) {
+    for (j, 0, n) {
+      C[((i*n) + j)] = (A[((i*n) + j)]*B[((i*n) + j)])
+    }
+  }
+}

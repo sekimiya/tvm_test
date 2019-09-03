@@ -18,3 +18,5 @@ print(tvm.lower(s, [A, B, C], simple_mode=True))
 f = tvm.lower(s, [A, B, C], name="test_add")
 
 m = tvm.build(f, target="llvm")
+
+print(m)
