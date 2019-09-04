@@ -1,0 +1,57 @@
+sekiy@gpu:~/workspace/tvm_test$ python3 vta_test.py 
+// attr [A_buf] storage_scope = "global"
+allocate A_buf[int32 * 1024]
+// attr [B_buf] storage_scope = "global"
+allocate B_buf[int32 * 1024]
+produce A_buf {
+  for (i1, 0, 64) {
+    for (i3, 0, 16) {
+      A_buf[((i1*16) + i3)] = A[((i1*16) + i3)]
+    }
+  }
+}
+produce B_buf {
+  for (i1, 0, 64) {
+    for (i3, 0, 16) {
+      B_buf[((i1*16) + i3)] = B[((i1*16) + i3)]
+    }
+  }
+}
+produce C_buf {
+  for (i1, 0, 64) {
+    for (i3, 0, 16) {
+      A_buf[((i1*16) + i3)] = (A_buf[((i1*16) + i3)] + B_buf[((i1*16) + i3)])
+    }
+  }
+}
+produce C {
+  for (i1, 0, 64) {
+    for (i3, 0, 16) {
+      B_buf[((i1*16) + i3)] = int8(A_buf[((i1*16) + i3)])
+    }
+  }
+}
+
+// attr [A_buf] storage_scope = "local.acc_buffer"
+// attr [iter_var(vta, , vta)] coproc_scope = 2
+produce A_buf {
+  VTALoadBuffer2D(tvm_thread_context(VTATLSCommandHandle()), A, 0, 64, 1, 64, 0, 0, 0, 0, 0, 3)
+}
+produce B_buf {
+  VTALoadBuffer2D(tvm_thread_context(VTATLSCommandHandle()), B, 0, 64, 1, 64, 0, 0, 0, 0, 64, 3)
+}
+// attr [iter_var(vta, , vta)] coproc_uop_scope = "VTAPushALUOp"
+produce C_buf {
+  VTAUopLoopBegin(64, 1, 1, 0)
+  VTAUopPush(1, 0, 0, 64, 0, 2, 0, 0)
+  VTAUopLoopEnd()
+}
+vta.coproc_dep_push(2, 3)
+// attr [iter_var(vta, , vta)] coproc_scope = 3
+vta.coproc_dep_pop(2, 3)
+produce C {
+  VTAStoreBuffer2D(tvm_thread_context(VTATLSCommandHandle()), 0, 4, C, 0, 64, 1, 64)
+}
+vta.coproc_sync()
+
+Successful vector add test!
