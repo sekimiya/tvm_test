@@ -1,3 +1,11 @@
+tvm公式チュートリアルより
+tvmの各種python libにpathを通す
+公式ドキュメントだとvtaにpathが通らないので、忘れずに追加する
+
+# for tvm
+export TVM_HOME=~/workspace/build/tvm/
+export PYTHONPATH=$TVM_HOME/python:$TVM_HOME/topi/python:$TVM_HOME/nnvm/python:$TVM_HOME/vta/python:${PYTHONPATH}
+
 llvmのbuild flagを立ててrebuildすればおｋ？
 参考:https://github.com/dmlc/tvm/issues/966
 todo:tvmのllvm build flagを探す
@@ -91,3 +99,47 @@ produce C {
     }
   }
 }
+
+hardware向けのsucheduling の実装を追いかける
+
+vta_get_started.pyのschedulingの一部
+s[A_buf].pragma(s[A_buf].op.axis[0], env.dma_copy)
+
+pragma以下がhard向けの実装？
+
+scheduling実装はpython/tvm/scheduling.pyにまとまっている
+
+def pragma():のコメントを一部引用
+loopに対するアノテーション？
+DMA転送をしているっぽいので、soft的に最適化したloopに対するhard特有の操作はpragma()で行うようなノリ？
+        """Annotate the iteration with pragma
+
+        This will translate to a pragma_scope surrounding
+        the corresponding loop generated.
+        Useful to support experimental features and extensions.
+
+    def pragma(self, var, pragma_type, pragma_value=None):
+        if isinstance(pragma_value, string_types):
+            pragma_value = convert(pragma_value)
+	    //_StagePragma()の実態はなんなのか...(Python側に実装がない
+        _api_internal._StagePragma(self, var, pragma_type, pragma_value)
+
+_api_internal.pyのコメント抜粋
+_で始めるpythonのAPIの実態はC++側にある
+
+"""Namespace of internal API
+
+The functions in this namespace are automatically exported from C++ side via PackedFunc
+that is registered by "TVM_REGISTER_*" macro. This way makes calling Python functions from C++
+side very easily.
+
+Each string starts with "_" in the "TVM_REGISTER_*" macro is an internal API. You can find
+all the functions in "api_lang.cc", "api_base.cc", "api_arith.cc" and "api_ir.cc" under "src/api".
+"""
+
+todo:src/tvm/api/*.ccを調査
+
+src/tvm/api/*.ccを筆頭にしたC++側のAPI郡は、llvmのAPIを利用して、IRを走査してpragma()の第三引数のenv.dma_copyなどで示されるloop構造の変更挿入用のpragmaを打ち込む？
+pragmaはPython側の実装でユーザ定義のコードと置き換えられる？
+todo : Python側のコード生成ロジックを調査
+
