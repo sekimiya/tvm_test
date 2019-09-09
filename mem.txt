@@ -143,3 +143,87 @@ src/tvm/api/*.ccを筆頭にしたC++側のAPI郡は、llvmのAPIを利用して
 pragmaはPython側の実装でユーザ定義のコードと置き換えられる？
 todo : Python側のコード生成ロジックを調査
 
+独自アーキテクチャ向けのオリジナルのスケジュールを実装するには？
+
+
+def _inject_copy(src, dst, pad_before, pad_after, pad_value):
+
+//vta_age_started.pyのdma_copyの実装を参考に調査する
+s[B_buf].pragma(s[B_buf].op.axis[0], env.dma_copy)
+→ 
+//このように展開される
+produce B_buf {
+  VTALoadBuffer2D(tvm_thread_context(VTATLSCommandHandle()), B, 0, 64, 1, 64, 0, 0, 0, 0, 64, 3)
+}
+
+env.dma_copyについて
+environment.py, class Environment(object), C++のllvmをPythonから呼び出し、木構造を舐め、指定場所に展開用のpragma()を利用して独自定義のpragma挿入する
+    @property
+    def dma_copy(self):
+        """DMA copy pragma"""
+        return ("dma_copy"
+                if not self.mock_mode
+                else "skip_dma_copy")
+挿入したpragmaは
+vta.lower(s, [A, B, C], simple_mode=True)
+によって展開される
+todo : lower()の調査
+
+ir_pass.py, 
+def _inject_copy(src, dst, pad_before, pad_after, pad_value):
+-------中略
+//以下のようにVTALoadBuffer2Dの定義がある
+//これlowerとどうやって繋がるんだろう...
+            irb.emit(tvm.call_extern(
+                "int32", "VTALoadBuffer2D",
+                env.dev.command_handle,
+                src.data, offset, x_size, y_size, x_stride,
+                x_pad_before, y_pad_before,
+                x_pad_after, y_pad_after,
+                dst.access_ptr("r", "int32"), mem_type))
+            return irb.get()
+
+実際に生成されたコードからcallされるVTALoadBuffer2Dの実態は、vta/src/runtime.cc, void VTALoadBuffer2D()にある
+
+独自アーキテクチャ向けの専用スケジューリング実装のためのまとめ
+・pragmaの定義
+IR段階ではまず、単にpragmaをIRの木構造に埋め込む必要がある
+この段階では、実際のコードではなく、単なるpragmaとして扱われる
+pragmaはvta/python/vta/environment.pyにdef dma_copy(self)のように定義する
+//pragmaを定義する関数のサンプル
+    @property
+    def dma_copy(self):
+        """DMA copy pragma"""
+        return ("dma_copy"
+                if not self.mock_mode
+                else "skip_dma_copy")
+
+・pragmaを挿入したIRからのcode gen
+pragmaを挿入したIRはvta.lower(s, [A, B, C], simple_mode=True)のようにvta.lower()メソッドでpragmaが展開され、実際に定義されたC++の関数をcallするコードにloweringされる
+例えば以下のように展開される
+
+全コードはvta_get_started.pyを参照
+//対応するtvmのコード
+A_buf = tvm.compute((o, m, env.BATCH, env.BLOCK_OUT), lambda *i: A(*i), "A_buf")
+//単なるbufferのcopy
+produce A_buf {
+  for (i1, 0, 64) {
+    for (i3, 0, 16) {
+      A_buf[((i1*16) + i3)] = A[((i1*16) + i3)]
+    }
+  }
+}
+
+//loopのscope?あとで調べる
+s[A_buf].set_scope(env.acc_scope)
+//DMA転送用のpragmaを挿入
+s[A_buf].pragma(s[A_buf].op.axis[0], env.dma_copy)
+
+//対応するloweringされたコード
+// attr [A_buf] storage_scope = "local.acc_buffer"
+// attr [iter_var(vta, , vta)] coproc_scope = 2
+produce A_buf {
+  //定義されたC++のfunctionが呼ばれる
+  VTALoadBuffer2D(tvm_thread_context(VTATLSCommandHandle()), A, 0, 64, 1, 64, 0, 0, 0, 0, 0, 3)
+}
+
