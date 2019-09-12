@@ -332,3 +332,46 @@ def build_config(debug_flag=0, **kwargs):
     ・専用命令用のpragmaの定義
     ・ソフトウェア最適化後のIRをC++で定義した処理単位でのAPIを呼び出すIRに変換するためのpass定義
     
+    結局
+    デバイス側 → pragma()で展開されるAPIの粒度まで抽象化して実装すればなんでもあり。IRレベルで挿入したい処理の粒度を意識して必要な処理を実装する
+    きっちりしたAPIが定義されているデバイスなら、SDKを一緒にbuildして、そのAPIを呼び出す程度でOK？
+    コンパイラ側 → スケジュールで生成されたIRをpragma()でハードウェアのAPIに展開するIR Passの実装が肝、ir_pass.pyに実装がまとまっているので近々はここを見る
+    
+    todo : pragma()でのIR2IRのpass実装調査（ir_pass.py）
+
+ir_passの実装でやること
+・ハードウェア向けのpragmaが刺さったIRを舐める
+・pragmaとスケジューリングを展開したIRをC++で実装されたハードウェア向けのAPIへと置き換える
+  どうやって、IRを舐めて、C+＋APIへと置き換えているのか？ → ir_pass.pyの inject_dma_intrin()メソッドなどを調査
+
+IRの変換
+low_level_custum_pass.pyがいろいろ役立ちそう
+  //コメント抜粋
+  """
+  Writing a Customized Pass
+  =========================
+  **Author**: `Jian Weng <https://were.github.io>`_
+
+  TVM is a framework that abstracts away the heterogenity of machine learning accelerators.
+  Sometimes users may want customize some analysis and IR transformations
+  to adapt TVM to their own specialized hardware. This tutorial helps users write
+  a customized pass in TVM.
+
+  Prerequisites
+  -------------
+
+  Before reading this tutorial, we assume readers have already known these topics well:
+
+  - Writing an algorithm in TVM and schedule it. Otherwise, see example tutorials like
+    :ref:`opt-gemm`.
+  - The basic structure of HalideIR. Otherwise, see ``HalideIR/src/ir/IR.h`` to learn what
+    attributes of IR nodes are defined.
+  - Visitor design pattern. Otherwise, check the
+    `Python AST module <https://docs.python.org/3/library/ast.html>`_ to see how an AST
+    visitor is implemented.
+  - How a HalideIR/Schedule is lowered to either a LoweredFunc class or a LLVM module. Otherwise,
+    take a look at ``python/tvm/build_module.py`` to get some basics.
+
+  """
+
+
