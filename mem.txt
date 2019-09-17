@@ -375,3 +375,139 @@ low_level_custum_pass.pyがいろいろ役立ちそう
   """
 
 
+PackedFunc
+引用
+"TVM/NNVMの作者のTianqi Chenさん(超人)は、PackedFuncという独自の方法でC++とPythonの連携を可能にしています。コードベースを読むと、この仕組みを使って、C++からPythonのコールバックを呼ぶ、などの技が多用されていることがわかります。Boost.Pythonのような大きなライブラリを使わずにこのようなことができることだけでも面白いと思いますが、さらに面白い使い方があります。"
+
+https://qiita.com/masahi/items/f722db96338d8868f222
+https://github.com/dmlc/tvm/blob/master/include/tvm/runtime/packed_func.h
+
+api_pass.ccにアーキテクチャ固有の実装の追加が入っている？
+以下,api_pass.ccの一部
+
+    // make from two arguments
+    #define REGISTER_PASS(PassName)                                   \
+      TVM_REGISTER_API("ir_pass."#PassName)                           \
+      .set_body_typed(PassName);                                     \
+
+
+    REGISTER_PASS(ConvertSSA);
+    REGISTER_PASS(VerifySSA);
+    REGISTER_PASS(RewriteUnsafeSelect);
+    REGISTER_PASS(Inline);
+    REGISTER_PASS(IRTransform);
+    REGISTER_PASS(VectorizeLoop);
+    REGISTER_PASS(SkipVectorize);
+    REGISTER_PASS(UnrollLoop);
+    REGISTER_PASS(InjectCopyIntrin);
+    REGISTER_PASS(ThreadSync);
+    REGISTER_PASS(MakeAPI);
+    REGISTER_PASS(BindDeviceType);
+    REGISTER_PASS(SplitHostDevice);
+    REGISTER_PASS(StorageRewrite);
+    REGISTER_PASS(CoProcSync);
+    REGISTER_PASS(LowerStorageAccessInfo);
+    REGISTER_PASS(InjectVirtualThread);
+    REGISTER_PASS(InjectPrefetch);
+    REGISTER_PASS(InjectDoubleBuffer);
+    REGISTER_PASS(LoopPartition);
+    REGISTER_PASS(RemoveNoOp);
+    REGISTER_PASS(SplitPipeline);
+    REGISTER_PASS(LiftAttrScope);
+    REGISTER_PASS(NarrowChannelAccess);
+    REGISTER_PASS(LowerThreadAllreduce);
+    REGISTER_PASS(LowerWarpMemory);
+    REGISTER_PASS(RemapThreadAxis);
+    REGISTER_PASS(LowerIntrin);
+    REGISTER_PASS(LowerCustomDatatypes);
+    REGISTER_PASS(LowerTVMBuiltin);
+    REGISTER_PASS(CombineContextCall);
+    REGISTER_PASS(VerifyMemory);
+    REGISTER_PASS(VerifyGPUCode);
+    REGISTER_PASS(DecorateDeviceScope);
+    REGISTER_PASS(InstrumentBoundCheckers);
+    }  // namespace ir
+    }  // namespace tvm
+
+low_level_custum_pass.pyより
+stmt = tvm.ir_pass.IRTransform(stmt, None, vectorize8, ['For'])は、PackedFuncという独自の方法でPythonから、C++のライブラリを呼び出している
+IRTransformの処理の実態は以下のC++コード
+    Stmt IRTransform(const Stmt& ir_node,
+                    const runtime::PackedFunc& f_preorder,
+                    const runtime::PackedFunc& f_postorder,
+                    const Array<Expr>& only_enable) {
+      std::unordered_set<uint32_t> only_type_index;
+      for (Expr s : only_enable) {
+        only_type_index.insert(Node::TypeKey2Index(s.as<StringImm>()->value.c_str()));
+      }
+      return IRTransformer(f_preorder, f_postorder, only_type_index)
+          .Mutate(ir_node);
+      }
+
+    def vectorize(stmt):
+        global loops
+        # find_width8(self)
+        tvm.ir_pass.PostOrderVisit(stmt, find_width8)
+        # tvm.ir_pass.PostOrderVisit(stmt, find_width8(self))
+
+        if not loops:
+            return stmt
+        stmt = tvm.ir_pass.IRTransform(stmt, None, vectorize8, ['For'])
+
+        return stmt
+
+・stmtの変形
+stmt.pyより、Forのデータ構造
+    @register_node
+    class For(Stmt):
+        """For node.
+
+        Parameters
+        ----------
+        loop_var : Var
+            The loop variable.
+
+        min_val : Expr
+            The begining value.
+
+        extent : Expr
+            The length of the loop.
+
+        for_type : int
+            The for type.
+
+        device_api : int
+            The device api type.
+
+        body : Stmt
+            The body statement.
+        """
+
+low_level_custum_pass.pyが参考になる
+基本的に3つのメソッドでIRの探索、IRの変形、IR探索＆変形の呼び出しを行う
+find(op)
+  opを引数にとり、任意のtvm.stmt.*が含まれるかチェックを行う
+  目的の文が含まれていた場合は、そのopをopを保存するために宣言された配列へappendする
+
+test_tranceform(op)
+  test()から呼ばれ、find()の条件で発見したopを引数にとる
+  入力されたopに対し、定義された任意の変換を行う
+  変換を行ったopから実際のcodeの実態であるbodyを構築して、returnする
+
+test(stmt)
+  stmtを引数に取り、IRを舐め、find()により変形対象のopを見つけ、test_tranceform()に引き渡し、任意の変形を行えるように制御を行う
+  //IRを舐めて、find()の定義に一致するopを探し、stmtに格納
+  tvm.ir_pass.PostOrderVisit(stmt, find)
+  //test_tranceform()にしたがって、与えられたstmtを変形
+  stmt = tvm.ir_pass.IRTransform(stmt, None, test_tranceform, ['For'])
+
+  独自実装のPackedFuncにより、IRTransform()はPythonからC++の実装が呼ばれる
+    //ir_mutator.cc, 呼び出されるC++の実装
+    Stmt IRTransform(const Stmt& ir_node,
+                    const runtime::PackedFunc& f_preorder,
+                    const runtime::PackedFunc& f_postorder,
+                    const Array<Expr>& only_enable) 
+
+
+
+
