@@ -521,5 +521,27 @@ relay段階でグラフノードの変換を行わない理由
   → 現状relay周りの開発は途上であり、APIが充実しておらず、変更の可能性もあるため、tvm IRでのIR変換で実装を行う
   全ての実装をIR2IRで実現することができる
 
+convと融合可能なレイヤーの処理
+このあたりが怪しいので後で調べる
+def _schedule_spatial_pack(cfg, s, data_vec, kernel_vec,
+                           conv, output, last):
 
+cudaだとこっち？
+def schedule_conv2d_transpose_nchw_cuda(cfg, outs):
+    """TOPI Schedule callback for conv2d transpose operator.
+
+    Parameters
+    ----------
+    cfg: ConfigEntity
+        The parameters for this template
+
+    outs: Array of Tensor
+        The computation graph description of conv2d transpose
+        in the format of an array of tensors.
+
+    Returns
+    -------
+    s: Schedule
+        The computation schedule for conv2d transpose.
+    """
 
