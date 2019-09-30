@@ -522,6 +522,11 @@ relay段階でグラフノードの変換を行わない理由
   全ての実装をIR2IRで実現することができる
 
 convと融合可能なレイヤーの処理
+
+test_op_fusion.pyあたり？
+  def test_fuse_conv2d_elu():とか
+  def test_concatenate_conv2d():
+
 このあたりが怪しいので後で調べる
 def _schedule_spatial_pack(cfg, s, data_vec, kernel_vec,
                            conv, output, last):
@@ -545,3 +550,4 @@ def schedule_conv2d_transpose_nchw_cuda(cfg, outs):
         The computation schedule for conv2d transpose.
     """
 
+relayレベルのfusionだと、test_pass_fuse_ops.py
